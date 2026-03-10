@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <title>Gamedev Canvas Workshop - lesson 10: finishing up</title>
-    <style>* { padding: 0; margin: 0; } canvas { background: #eee; display: block; margin: 0 auto; }</style>
+    <style>* { padding: 0; margin: 0; } canvas { background: #1900ff; display: block; margin: 0 auto; }</style>
 </head>
 <body>
 
@@ -13,17 +13,22 @@
     var canvas = document.getElementById("myCanvas");
     var ctx = canvas.getContext("2d");
     var ballRadius = 10;
-    var x = canvas.width/2;
-    var y = canvas.height-30;
-    var dx = 2;
-    var dy = -2;
+    var initialBallCount = 4;
+    var balls = [];
+    var gravity = 0.08;
+    var airDrag = 0.999;
+    var wallRestitution = 0.96;
+    var paddleRestitution = 0.98;
+    var paddleBounceBoost = 1.25;
+    var paddleSpinFactor = 0.45;
+    var speedCap = 8;
     var paddleHeight = 10;
     var paddleWidth = 75;
     var paddleX = (canvas.width-paddleWidth)/2;
     var rightPressed = false;
     var leftPressed = false;
     var brickRowCount = 5;
-    var brickColumnCount = 3;
+    var brickColumnCount = 8;
     var brickWidth = 75;
     var brickHeight = 20;
     var brickPadding = 10;
@@ -31,6 +36,33 @@
     var brickOffsetLeft = 30;
     var score = 0;
     var lives = 3;
+    var lastPaddleX = paddleX;
+    var paddleVX = 0;
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function createBall(spreadIndex) {
+        var angle = (-Math.PI/2) + (spreadIndex * 0.2);
+        var speed = 3.6 + Math.random() * 1.2;
+        return {
+            x: canvas.width / 2 + (Math.random() * 20 - 10),
+            y: canvas.height - 30,
+            dx: Math.cos(angle) * speed,
+            dy: Math.sin(angle) * speed,
+            radius: ballRadius
+        };
+    }
+
+    function resetBallBatch() {
+        balls = [];
+        for (var i = 0; i < initialBallCount; i++) {
+            balls.push(createBall(i - (initialBallCount - 1) / 2));
+        }
+    }
+
+    resetBallBatch();
 
     var bricks = [];
     for(var c=0; c<brickColumnCount; c++) {
@@ -71,13 +103,31 @@
             for(var r=0; r<brickRowCount; r++) {
                 var b = bricks[c][r];
                 if(b.status == 1) {
-                    if(x > b.x && x < b.x+brickWidth && y > b.y && y < b.y+brickHeight) {
-                        dy = -dy;
-                        b.status = 0;
-                        score++;
-                        if(score == brickRowCount*brickColumnCount) {
-                            alert("YOU WIN, CONGRATS!");
-                            document.location.reload();
+                    for (var i = 0; i < balls.length; i++) {
+                        var ball = balls[i];
+                        var closestX = clamp(ball.x, b.x, b.x + brickWidth);
+                        var closestY = clamp(ball.y, b.y, b.y + brickHeight);
+                        var distX = ball.x - closestX;
+                        var distY = ball.y - closestY;
+                        var distSq = distX * distX + distY * distY;
+
+                        if (distSq <= ball.radius * ball.radius) {
+                            var overlapX = Math.min(Math.abs(ball.x - b.x), Math.abs(ball.x - (b.x + brickWidth)));
+                            var overlapY = Math.min(Math.abs(ball.y - b.y), Math.abs(ball.y - (b.y + brickHeight)));
+
+                            if (overlapX < overlapY) {
+                                ball.dx = -ball.dx * wallRestitution;
+                            } else {
+                                ball.dy = -ball.dy * wallRestitution;
+                            }
+
+                            b.status = 0;
+                            score++;
+                            if(score == brickRowCount*brickColumnCount) {
+                                alert("YOU WIN, CONGRATS!");
+                                document.location.reload();
+                            }
+                            break;
                         }
                     }
                 }
@@ -85,12 +135,27 @@
         }
     }
 
-    function drawBall() {
-        ctx.beginPath();
-        ctx.arc(x, y, ballRadius, 0, Math.PI*2);
-        ctx.fillStyle = "#0095DD";
-        ctx.fill();
-        ctx.closePath();
+    function drawBalls() {
+        for (var i = 0; i < balls.length; i++) {
+            var ball = balls[i];
+            var hue = ((ball.x / canvas.width) * 220 + (ball.y / canvas.height) * 140 + performance.now() * 0.08) % 360;
+            var gradient = ctx.createRadialGradient(
+                ball.x - ball.radius * 0.35,
+                ball.y - ball.radius * 0.35,
+                ball.radius * 0.2,
+                ball.x,
+                ball.y,
+                ball.radius
+            );
+            gradient.addColorStop(0, "hsl(" + hue + ", 100%, 75%)");
+            gradient.addColorStop(1, "hsl(" + ((hue + 70) % 360) + ", 100%, 45%)");
+
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.closePath();
+        }
     }
     function drawPaddle() {
         ctx.beginPath();
@@ -99,17 +164,33 @@
         ctx.fill();
         ctx.closePath();
     }
+    function drawBackground() {
+        var t = performance.now() * 0.03;
+        var backgroundGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        backgroundGradient.addColorStop(0, "hsl(" + ((210 + t) % 360) + ", 85%, 18%)");
+        backgroundGradient.addColorStop(0.5, "hsl(" + ((260 + t * 0.8) % 360) + ", 90%, 26%)");
+        backgroundGradient.addColorStop(1, "hsl(" + ((320 + t * 0.6) % 360) + ", 88%, 20%)");
+        ctx.fillStyle = backgroundGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     function drawBricks() {
+        var timeHue = performance.now() * 0.06;
         for(var c=0; c<brickColumnCount; c++) {
             for(var r=0; r<brickRowCount; r++) {
                 if(bricks[c][r].status == 1) {
                     var brickX = (r*(brickWidth+brickPadding))+brickOffsetLeft;
                     var brickY = (c*(brickHeight+brickPadding))+brickOffsetTop;
+                    var baseHue = (r * 38 + c * 56 + timeHue) % 360;
                     bricks[c][r].x = brickX;
                     bricks[c][r].y = brickY;
+
+                    var brickGradient = ctx.createLinearGradient(brickX, brickY, brickX + brickWidth, brickY + brickHeight);
+                    brickGradient.addColorStop(0, "hsl(" + baseHue + ", 100%, 70%)");
+                    brickGradient.addColorStop(1, "hsl(" + ((baseHue + 65) % 360) + ", 90%, 45%)");
+
                     ctx.beginPath();
                     ctx.rect(brickX, brickY, brickWidth, brickHeight);
-                    ctx.fillStyle = "#0095DD";
+                    ctx.fillStyle = brickGradient;
                     ctx.fill();
                     ctx.closePath();
                 }
@@ -128,40 +209,6 @@
     }
 
     function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBricks();
-        drawBall();
-        drawPaddle();
-        drawScore();
-        drawLives();
-        collisionDetection();
-
-        if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) {
-            dx = -dx;
-        }
-        if(y + dy < ballRadius) {
-            dy = -dy;
-        }
-        else if(y + dy > canvas.height-ballRadius) {
-            if(x > paddleX && x < paddleX + paddleWidth) {
-                dy = -dy;
-            }
-            else {
-                lives--;
-                if(!lives) {
-                    alert("GAME OVER");
-                    document.location.reload();
-                }
-                else {
-                    x = canvas.width/2;
-                    y = canvas.height-30;
-                    dx = 2;
-                    dy = -2;
-                    paddleX = (canvas.width-paddleWidth)/2;
-                }
-            }
-        }
-
         if(rightPressed && paddleX < canvas.width-paddleWidth) {
             paddleX += 7;
         }
@@ -169,8 +216,86 @@
             paddleX -= 7;
         }
 
-        x += dx;
-        y += dy;
+        paddleVX = paddleX - lastPaddleX;
+        lastPaddleX = paddleX;
+
+        drawBackground();
+        drawBricks();
+        drawBalls();
+        drawPaddle();
+        drawScore();
+        drawLives();
+        collisionDetection();
+
+        for (var i = balls.length - 1; i >= 0; i--) {
+            var ball = balls[i];
+
+            ball.dy += gravity;
+            ball.dx *= airDrag;
+            ball.dy *= airDrag;
+
+            var speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+            if (speed > speedCap) {
+                var s = speedCap / speed;
+                ball.dx *= s;
+                ball.dy *= s;
+            }
+
+            if (ball.x + ball.dx > canvas.width - ball.radius) {
+                ball.x = canvas.width - ball.radius;
+                ball.dx = -Math.abs(ball.dx) * wallRestitution;
+            } else if (ball.x + ball.dx < ball.radius) {
+                ball.x = ball.radius;
+                ball.dx = Math.abs(ball.dx) * wallRestitution;
+            }
+
+            if (ball.y + ball.dy < ball.radius) {
+                ball.y = ball.radius;
+                ball.dy = Math.abs(ball.dy) * wallRestitution;
+            }
+
+            if (ball.y + ball.dy > canvas.height - ball.radius - paddleHeight) {
+                var paddleTop = canvas.height - paddleHeight;
+                var withinPaddle = ball.x > paddleX - ball.radius && ball.x < paddleX + paddleWidth + ball.radius;
+
+                if (withinPaddle && ball.y < paddleTop) {
+                    var hitPos = (ball.x - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
+                    hitPos = clamp(hitPos, -1, 1);
+                    var targetBounceAngle = hitPos * (Math.PI / 3);
+                    var incomingSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+                    var bounceSpeed = Math.max(4.2, incomingSpeed * paddleRestitution * paddleBounceBoost);
+                    ball.dx = Math.sin(targetBounceAngle) * bounceSpeed + (paddleVX * paddleSpinFactor);
+                    ball.dy = -Math.cos(targetBounceAngle) * bounceSpeed;
+
+                    var postBounceSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+                    if (postBounceSpeed > speedCap) {
+                        var bs = speedCap / postBounceSpeed;
+                        ball.dx *= bs;
+                        ball.dy *= bs;
+                    }
+
+                    ball.y = paddleTop - ball.radius;
+                } else if (ball.y + ball.dy > canvas.height - ball.radius) {
+                    ball.y = canvas.height - ball.radius;
+                    ball.dy = -Math.abs(ball.dy) * wallRestitution;
+                }
+            }
+
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+        }
+
+        if (balls.length === 0) {
+            lives--;
+            if(!lives) {
+                alert("GAME OVER");
+                document.location.reload();
+            } else {
+                resetBallBatch();
+                paddleX = (canvas.width-paddleWidth)/2;
+            }
+        }
+
         requestAnimationFrame(draw);
     }
 
