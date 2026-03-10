@@ -55,7 +55,7 @@
     var paddleRestitution = 0.98;
     var paddleBounceBoost = 1.25;
     var paddleSpinFactor = 0.45;
-    var speedCap = 8;
+    var speedCap = 16;
     var paddleHeight = 10;
     var paddleWidth = 75;
     var paddleX = (canvas.width-paddleWidth)/2;
@@ -79,13 +79,14 @@
 
     function createBall(spreadIndex) {
         var angle = (-Math.PI/2) + (spreadIndex * 0.2);
-        var speed = 3.6 + Math.random() * 1.2;
+        var speed = 7.5 + Math.random() * 2.5;
         return {
             x: canvas.width / 2 + (Math.random() * 20 - 10),
             y: canvas.height - 30,
             dx: Math.cos(angle) * speed,
             dy: Math.sin(angle) * speed,
-            radius: ballRadius
+            radius: ballRadius,
+            health: 50
         };
     }
 
@@ -169,6 +170,11 @@
                                 ball.dx = -ball.dx * wallRestitution;
                             } else {
                                 ball.dy = -ball.dy * wallRestitution;
+                            }
+
+                            ball.health--;
+                            if (ball.health <= 0) {
+                                balls.splice(i, 1);
                             }
 
                             b.status = 0;
