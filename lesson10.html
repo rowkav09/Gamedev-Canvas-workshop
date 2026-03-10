@@ -3,18 +3,52 @@
 <head>
     <meta charset="utf-8" />
     <title>Gamedev Canvas Workshop - lesson 10: finishing up</title>
-    <style>* { padding: 0; margin: 0; } canvas { background: #1900ff; display: block; margin: 0 auto; }</style>
+    <style>
+        * { padding: 0; margin: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #0f1330; color: #ffffff; }
+        .controls {
+            width: 480px;
+            margin: 24px auto 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            justify-content: center;
+        }
+        .controls label { font-size: 14px; }
+        .controls input[type="range"] { width: 140px; }
+        .controls button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #0095DD;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .controls button:hover { background: #00a8f7; }
+        canvas { background: #1900ff; display: block; margin: 0 auto 24px; border-radius: 8px; }
+    </style>
 </head>
 <body>
+
+<div class="controls">
+    <label for="ballCount">Balls: <span id="ballCountValue">4</span></label>
+    <input id="ballCount" type="range" min="1" max="12" value="4" />
+    <button id="startButton" type="button">Start</button>
+</div>
 
 <canvas id="myCanvas" width="480" height="320"></canvas>
 
 <script>
     var canvas = document.getElementById("myCanvas");
     var ctx = canvas.getContext("2d");
+    var ballCountSlider = document.getElementById("ballCount");
+    var ballCountValue = document.getElementById("ballCountValue");
+    var startButton = document.getElementById("startButton");
     var ballRadius = 10;
     var initialBallCount = 4;
     var balls = [];
+    var gameStarted = false;
     var gravity = 0.08;
     var airDrag = 0.999;
     var wallRestitution = 0.96;
@@ -62,8 +96,6 @@
         }
     }
 
-    resetBallBatch();
-
     var bricks = [];
     for(var c=0; c<brickColumnCount; c++) {
         bricks[c] = [];
@@ -71,6 +103,24 @@
             bricks[c][r] = { x: 0, y: 0, status: 1 };
         }
     }
+
+    ballCountSlider.addEventListener("input", function() {
+        ballCountValue.textContent = ballCountSlider.value;
+    });
+
+    startButton.addEventListener("click", function() {
+        if (gameStarted) {
+            return;
+        }
+        initialBallCount = parseInt(ballCountSlider.value, 10);
+        ballCountValue.textContent = initialBallCount;
+        resetBallBatch();
+        gameStarted = true;
+        ballCountSlider.disabled = true;
+        startButton.disabled = true;
+        startButton.textContent = "Running";
+        draw();
+    });
 
     document.addEventListener("keydown", keyDownHandler, false);
     document.addEventListener("keyup", keyUpHandler, false);
@@ -208,6 +258,20 @@
         ctx.fillText("Lives: "+lives, canvas.width-65, 20);
     }
 
+    function drawStartScreen() {
+        drawBackground();
+        drawBricks();
+        drawPaddle();
+        drawScore();
+        drawLives();
+
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "center";
+        ctx.fillText("Choose ball count and press Start", canvas.width / 2, canvas.height / 2);
+        ctx.textAlign = "start";
+    }
+
     function draw() {
         if(rightPressed && paddleX < canvas.width-paddleWidth) {
             paddleX += 7;
@@ -299,7 +363,7 @@
         requestAnimationFrame(draw);
     }
 
-    draw();
+    drawStartScreen();
 </script>
 
 </body>
